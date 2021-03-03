@@ -13,7 +13,7 @@
   add_diag=0.01                      !addition to G matrix before inversion to make G positive definite (needed to invert matrix)
   option="Gonly"                     !"noGnoGINV"||"Gonly"||"GandGINV"
   ivanraden=1                        !=1 (uses centralised genotypes)|| 2 (uses centralised and standarised genotypes)
-  calc_freqs=T                       !=T||N (if(calc_freqs==N) a "gghatvr3.frq" (single column with freqs per SNP) is used to read the frequencies to be used from)
+  calc_freqs=T                       !=T||F (if(calc_freqs==F) a "gghatvr3.frq" (single column with freqs per SNP) is used to read the frequencies to be used from)
 /
 
 

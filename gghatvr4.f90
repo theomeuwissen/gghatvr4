@@ -127,7 +127,7 @@ else
   write(file_name(ic:ic+1),'(i2)')ichrom
 endif
 if(fil_format(1:5)=="plink")then
-   open(4,file=genotypefile,access="stream",form='unformatted',status='old') !read plink.bed file
+   open(4,file=file_name,access="stream",form='unformatted',status='old') !read plink.bed file
    read(4)ifour(1:3) !read 3 magic plink numbers
    file_name=genotypefile
    icc=scan(file_name,'.',back=.true.)
