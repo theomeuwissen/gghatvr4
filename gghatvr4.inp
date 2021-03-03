@@ -1,0 +1,63 @@
+!Comment lines:
+!The "inputs" block (see below) is required and limited by the "&inputs" and "/" sign.
+!The indicated variables may not all be relevant. If not relevant they may be omitted (eg. by putting "!" in front of them.
+!The order of the variables is not important. 
+
+&inputs
+  nchroms=3                          !#number of chromosomes  # 1 means no seperation of SNPs over chroms; #0 means "gghatvr3.g" file contains G-matrix 
+  pnloc= 1456, 2398, 2901            !#for chromosome i=1:3 : the number of loci per chromosome
+  pndat=2356                         !number of individuals with genotype data
+  genotypefile="genotype.dat"        !"0" if G is in "gghatvr3.g"; see (*) below for formats
+  fil_format="ldmipgen"              ! "ldmipgen"||"ldmipout"||"ldmipmrk"||"012"||"bgl"||"plinkbed"  (see (*) below)
+  mapfile="marker.map"               !"0" if not needed; see (**) for instructions
+  add_diag=0.01                      !addition to G matrix before inversion to make G positive definite (needed to invert matrix)
+  option="Gonly"                     !"noGnoGINV"||"Gonly"||"GandGINV"
+  ivanraden=1                        !=1 (uses centralised genotypes)|| 2 (uses centralised and standarised genotypes)
+  calc_freqs=T                       !=T||N (if(calc_freqs==N) a "gghatvr3.frq" (single column with freqs per SNP) is used to read the frequencies to be used from)
+/
+
+
+(*) 'filename' yields the genotype file (possibly incl. path).
+# if Gmatrix is provided in gghatvr3.g file: filename="0"
+#'filename' can include a '%'-sign which is replaced by the chromosome number to read the e.g. 'ldmip3.out' file of
+# each chromosome. E.g. ldmip3.out% means that chromosome 2 data are read from ldmip3.out2. Or: chr%/ldmip3.out
+# means that chromosme 2 data are read from ldmip3.out in directory chr2/
+#
+# Which format is used for reading the genotypes depends on the name of the genotype file:
+#
+# IF(fil_format == "ldmipmrk"):
+# it's assumed to be a .mrk file: every animal has to lines: one for the 1st chromosome and one for the 2nd chromosome (although the alleles may be swapped; i.e.
+# the genotypes	  do not need to be phased). column_1 contains an    animal_ID which	can also be recovered from the output files. column_2:(nloci+1) contains the nloci alleles
+# of the chromosomes, coded 1, 2 or 0 (0=unknown).
+#
+#
+# IF(fil_format == "ldmipout"):
+# it's assumed to be a ldmip.out file. The formatting of the output of the ldmip program is assumed.
+#
+#
+# IF(fil_format == "ldmipgen":  ##this is actually a quite general genotype file:
+# it's assumed to be a genotype file, whose alleles will be renumbered. 
+# The first line will be usually skipped as a header line, but incase a markermap is provided (see HELP3), it contains the (alphanumeric) marker_ids at columns 2:(nloci+1) [column1 is skipped]
+# The format of the remaining lines is:
+# idno A T G C 0 0 T T..... 
+# idno=integer_ID_of_animal, the letters denode nucleotides, "0" denotes missing (2 per locus; 2*nloci per line) 
+#
+#IF(fil_format == "012":
+#the genotypes are assumed coded 0, 1, 2, for homozygot, heterozygot, opposite homozygot (any number outside range 0-2 is considered as missing genotype)
+#one line per animal: animal_id genot_1 genot_2 ..... genot_n
+#
+#IF(fil_format == "bgl":
+# beagle output file with extension ".phased"
+#
+#IF(fil_format == "plinkbed":
+# PLINK file with extension ".bed" (.bim file is not needed)
+# if PLINK .fam file is present: its 2nd column will be read to obtain IDnumbers for the genotyped animals
+
+
+
+#(**) the marker map file contains:
+line1: header line 
+In the remaining lines:
+chromosome_no marker_id 
+(the marker id agrees with those of columns 2:(nloci+1) of the header line of the .gen genotypefile)  
+(note: the number or chromosomes at the first position of gghatvr3.inp is 1 (since all data come in one (chromosome) file)
