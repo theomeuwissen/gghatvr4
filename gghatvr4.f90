@@ -1,5 +1,4 @@
-!ifort -r8  gghatvr3.f90  -mkl -lmkl_lapack95_lp64 -lmkl_blas95_lp64 -o gghatvr3
-!ifort -r8 -qopenmp gghatvr3.f90  -mkl -lmkl_lapack95_lp64 -lmkl_blas95_lp64 -o gghatvr3
+!ifort -r8 -qopenmp gghatvr4.f90  -mkl -lmkl_lapack95_lp64 -lmkl_blas95_lp64 -o gghatvr4
 
 !include 'clusterm.f90'
 program main
@@ -35,7 +34,7 @@ elseif(option(1:8)=="GandGINV")then
    igiv=1
 endif
 if(fil_format(1:5)=="plink")then
-   nbytes=ceiling(pdat/4.)
+   nbytes=ceiling(pndat/4.)
    allocate(ifour(nbytes))
 endif   
 
@@ -217,7 +216,7 @@ do
   elseif(fil_format(1:3)=="012")then !OPTION1
      read(4,*,end=9)ids(ncount),(iifix(1,j,ncount),j=1,nloc)
   elseif(fil_format(1:5)=="plink")then
-     read(4,end=9)ifour(1:nbytes)
+     read(4)ifour(1:nbytes)
      ianim=0; sumd=0.0
      do j=1,nbytes
         jval=ibits(ifour(j),jpos,2)
@@ -236,6 +235,7 @@ do
            nfrq(ncount)=nfrq(ncount)+2
         enddo
      enddo
+     if(ncount==pnloc(ichrom))goto 9 !all loci are read 
   else                           !OPTION1
    read(4,*,end=9)ids(ncount),(iifix(1,j,ncount),j=1,nloc) !imean is actually ID number
    read(4,*)ids(ncount),(iifix(2,j,ncount),j=1,nloc)
@@ -331,10 +331,10 @@ endif
 print *,' No of loci,denom     =',nloc,denom
 
 if(igiv>=0)then
-l=nloc
-!!$OMP PARALLEL DO PRIVATE(i,j,ii,jj) SHARED(pndat,l,gmat,ifix,afix,option,ivanraden,frq)
-do i=1,pndat  !,1,-1 !pndat  !reverse order so that last row takes little time
+l=nloc; call cpu_time(start)
+do i=pndat,1,-1 !pndat  !reverse order so that last row takes little time
  ii=pndat+i
+!$OMP PARALLEL DO PRIVATE(i,j,ii,jj) SHARED(pndat,l,gmat,ifix,afix,fil_format,ivanraden,frq)
  do j=1,i-1
  if(fil_format(1:8)=="ldmipout")then
    jj=pndat+j
@@ -351,6 +351,7 @@ do i=1,pndat  !,1,-1 !pndat  !reverse order so that last row takes little time
    endif
  endif !option
  enddo
+!$OMP END PARALLEL DO
  if(fil_format(1:8)=="ldmipout")then
    Gmat(i,i)=Gmat(i,i)+dot(ifix(1,1:l,i),ifix(1,1:l,i))
    Gmat(ii,ii)=Gmat(ii,ii)+dot(ifix(2,1:l,i),ifix(2,1:l,i))
@@ -366,7 +367,7 @@ do i=1,pndat  !,1,-1 !pndat  !reverse order so that last row takes little time
    if(i==pndat)print *,'Gmat(n,n)',i,Gmat(i,i),Gmat(pndat+i,pndat+i)
  endif
 enddo
-!!$OMP END PARALLEL DO
+call cpu_time(finished); print *, ichrom,(finished-start)/60.," minutes"
 endif
 !Gmat(1:pndat,1:pndat)=Gmat(1:pndat,1:pndat)+matmul(transpose(afix(1:l,1:pndat)),afix(1:l,1:pndat))
 nnloc=nnloc+nloc
@@ -382,8 +383,16 @@ if(igiv<0)stop' Finished (without setting up G)'
 if(fil_format(1:8)=="ldmipout")then
   Gmat=Gmat/denomsum  !divide by sum of heterozygosities
 else
-  where(Gmat(pndat+1:2*pndat,pndat+1:2*pndat)>0.0)Gmat(1:pndat,1:pndat)=Gmat(1:pndat,1:pndat)/Gmat(pndat+1:2*pndat,pndat+1:2*pndat)
-  print *,"Gmat",Gmat(1:5,1)
+   do j=1,pndat
+      do i=1,pndat
+         if(Gmat(i+pndat,j+pndat)>0.0)then
+            Gmat(i,j)=Gmat(i,j)/Gmat(i+pndat,j+pndat)
+            Gmat(j,i)=Gmat(i,j)
+         endif   
+      enddo
+   enddo
+!  where(Gmat(pndat+1:2*pndat,pndat+1:2*pndat)>0.0)Gmat(1:pndat,1:pndat)=Gmat(1:pndat,1:pndat)/Gmat(pndat+1:2*pndat,pndat+1:2*pndat)
+  print *,"Gmat",(Gmat(i,i),i=1,5)
 endif
 
 IF(fil_format(1:8)=="ldmipout")then  !account for uncertainties in genotype probs
@@ -412,8 +421,7 @@ do j=1,i
     gmat(j,i)=gmat(i,j)
     write(3,*)i,j,gmat(i,j)
  else
-    gmat(i,j)=gmat(j,i)
-    write(3,*)i,j,gmat(i,j),ids(i),ids(j)   
+     write(3,*)i,j,gmat(i,j),ids(i),ids(j)   
  endif
 enddo
 enddo
