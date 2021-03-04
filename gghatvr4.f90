@@ -1,10 +1,10 @@
-!ifort -r8 -qopenmp gghatvr4.f90  -mkl -lmkl_lapack95_lp64 -lmkl_blas95_lp64 -o gghatvr4
+!ifort -r8 gghatvr4.f90  -mkl -lmkl_lapack95_lp64 -lmkl_blas95_lp64 -o gghatvr4
 
 !include 'clusterm.f90'
 program main
 !use clusterm
 USE lapack95, ONLY: potrf, potri
-use blas95, only:  dot
+use blas95, only:  dot,syrk
 
 integer, allocatable :: nfrq(:),imean(:),id(:),iifix(:,:,:),iorder(:)
 real, allocatable :: y(:),wt(:),wt2(:),sol(:),afix(:,:),frq(:),Gmat(:,:),ifix(:,:,:)
@@ -331,44 +331,34 @@ print *,' No of loci,denom     =',nloc,denom
 
 if(igiv>=0)then
 l=nloc; call cpu_time(start)
+if(fil_format(1:8)=="ldmipout")then
 do i=pndat,1,-1 !pndat  !reverse order so that last row takes little time
  ii=pndat+i
-!$OMP PARALLEL DO PRIVATE(i,j,ii,jj) SHARED(pndat,l,gmat,ifix,afix,fil_format,ivanraden,frq)
  do j=1,i-1
- if(fil_format(1:8)=="ldmipout")then
    jj=pndat+j
    Gmat(i,j)=Gmat(i,j)+dot(ifix(1,1:l,i),ifix(1,1:l,j))
    gmat(i,jj)=Gmat(i,jj)+dot(ifix(1,1:l,i),ifix(2,1:l,j))
    gmat(ii,j)=Gmat(ii,j)+dot(ifix(2,1:l,i),ifix(1,1:l,j))
    gmat(ii,jj)=Gmat(ii,jj)+dot(ifix(2,1:l,i),ifix(2,1:l,j))
- else
-   Gmat(j,i)=Gmat(j,i)+dot(afix(1:l,i),afix(1:l,j))
-   if(abs(ivanraden)==1)then
-     Gmat(pndat+j,pndat+i)=Gmat(pndat+j,pndat+i)+2.*sum(frq(1:l)*(1.-frq(1:l)),mask=(afix(1:l,i)/=0.0 .and. afix(1:l,j)/=0.0))
-   else
-     Gmat(pndat+j,pndat+i)=Gmat(pndat+j,pndat+i)+count(afix(1:l,i)/=0.0 .and. afix(1:l,j)/=0.0)
-   endif
- endif !option
+! else
+!   Gmat(j,i)=Gmat(j,i)+dot(afix(1:l,i),afix(1:l,j))
+!   if(abs(ivanraden)==1)then
+!     Gmat(pndat+j,pndat+i)=Gmat(pndat+j,pndat+i)+2.*sum(frq(1:l)*(1.-frq(1:l)),mask=(afix(1:l,i)/=0.0 .and. afix(1:l,j)/=0.0))
+!   else
+!     Gmat(pndat+j,pndat+i)=Gmat(pndat+j,pndat+i)+count(afix(1:l,i)/=0.0 .and. afix(1:l,j)/=0.0)
+!   endif
+! endif !option
  enddo
-!$OMP END PARALLEL DO
- if(fil_format(1:8)=="ldmipout")then
    Gmat(i,i)=Gmat(i,i)+dot(ifix(1,1:l,i),ifix(1,1:l,i))
    Gmat(ii,ii)=Gmat(ii,ii)+dot(ifix(2,1:l,i),ifix(2,1:l,i))
    Gmat(i,ii)=Gmat(i,ii)+dot(ifix(1,1:l,i),ifix(2,1:l,i))
    Gmat(ii,i)=Gmat(i,ii)
- else
-   Gmat(i,i)=Gmat(i,i)+dot(afix(1:l,i),afix(1:l,i))
-   if(abs(ivanraden)==1)then
-     Gmat(pndat+i,pndat+i)=Gmat(pndat+i,pndat+i)+2.*sum(frq(1:l)*(1.-frq(1:l)),mask=(afix(1:l,i)/=0.0))
-   else
-     Gmat(pndat+i,pndat+i)=Gmat(pndat+i,pndat+i)+count(afix(1:l,i)/=0.0)
-   endif
-   if(i==pndat)print *,'Gmat(n,n)',i,Gmat(i,i),Gmat(pndat+i,pndat+i)
- endif
 enddo
-call cpu_time(finished); print *, ichrom,(finished-start)/60.," minutes"
+else !option
+   call syrk(afix(1:l,1:pndat),Gmat(1:Pndat,1:Pndat),beta=1.0,uplo='L',trans='T')
+endif !option
+   call cpu_time(finished); print *, ichrom,(finished-start)/60.," minutes"
 endif
-!Gmat(1:pndat,1:pndat)=Gmat(1:pndat,1:pndat)+matmul(transpose(afix(1:l,1:pndat)),afix(1:l,1:pndat))
 nnloc=nnloc+nloc
 
 !if(igiv==-2)then  !MOVE TO WITHIN CHROM AREA
@@ -379,20 +369,20 @@ nnloc=nnloc+nloc
 ENDDO !ICHROM
 if(igiv<0)stop' Finished (without setting up G)'
 
-if(fil_format(1:8)=="ldmipout")then
+!if(fil_format(1:8)=="ldmipout")then
   Gmat=Gmat/denomsum  !divide by sum of heterozygosities
-else
-   do j=1,pndat
-      do i=1,pndat
-         if(Gmat(i+pndat,j+pndat)>0.0)then
-            Gmat(i,j)=Gmat(i,j)/Gmat(i+pndat,j+pndat)
-            Gmat(j,i)=Gmat(i,j)
-         endif   
-      enddo
-   enddo
-!  where(Gmat(pndat+1:2*pndat,pndat+1:2*pndat)>0.0)Gmat(1:pndat,1:pndat)=Gmat(1:pndat,1:pndat)/Gmat(pndat+1:2*pndat,pndat+1:2*pndat)
+!else
+!   do j=1,pndat
+!      do i=1,pndat
+!         if(Gmat(i+pndat,j+pndat)>0.0)then
+!            Gmat(i,j)=Gmat(i,j)/Gmat(i+pndat,j+pndat)
+!            Gmat(j,i)=Gmat(i,j)
+!         endif   
+!      enddo
+!   enddo
+!!  where(Gmat(pndat+1:2*pndat,pndat+1:2*pndat)>0.0)Gmat(1:pndat,1:pndat)=Gmat(1:pndat,1:pndat)/Gmat(pndat+1:2*pndat,pndat+1:2*pndat)
   print *,"Gmat",(Gmat(i,i),i=1,5)
-endif
+!endif
 
 IF(fil_format(1:8)=="ldmipout")then  !account for uncertainties in genotype probs
 wt=1.               !scale back the too high estimates of the diagonal
