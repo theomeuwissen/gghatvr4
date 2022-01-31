@@ -224,14 +224,17 @@ do
            if(ianim>pndat)exit
            afix(ncount,ianim)=2.  !2 is later substracted
            if(jval(k)==1)then      !note homozygot has automatically value '0'
-              print *,' ERROR: no missing genotypes allowed; missing genotypes are aribitrarily set to heterozygot ' ; IZt=1
+              print *,' missing genotypes allowed; missing genotypes are aribitrarily set to average allelefrq ' ; IZt=1
+              afix(ncount,ianim)=0.
            elseif(jval(k)==2)then  !change heterozygot to '1'
               afix(ncount,ianim)=1+2.
            elseif(jval(k)==3)then  !change homozygot to '2'
               afix(ncount,ianim)=2+2.
            endif
-           frq(ncount)=frq(ncount)+afix(ncount,ianim)-2.
-           nfrq(ncount)=nfrq(ncount)+2
+           if(afix(ncount,ianim)>=2.)then
+             frq(ncount)=frq(ncount)+afix(ncount,ianim)-2.
+             nfrq(ncount)=nfrq(ncount)+2
+           endif
         enddo
      enddo
      if(ncount==pnloc(ichrom))goto 9 !all loci are read 
