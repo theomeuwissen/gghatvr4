@@ -7,18 +7,18 @@ USE lapack95, ONLY: potrf, potri
 use blas95, only:  dot,syrk
 
 integer, allocatable :: nfrq(:),imean(:),id(:),iifix(:,:,:),iorder(:)
-real, allocatable :: y(:),wt(:),wt2(:),sol(:),afix(:,:),frq(:),Gmat(:,:),ifix(:,:,:)
+real, allocatable :: y(:),wt(:),wt2(:),sol(:),afix(:,:),frq(:),weight(:),Gmat(:,:),ifix(:,:,:)
 real*4, allocatable :: Amat(:,:)
 real :: add_diag(1)
 integer :: pnloc(100),pnmeans,pnhap,pndat
-character(len=100) :: genotypefile,file_name,option,fil_format,mapfile
+character(len=100) :: genotypefile,file_name,option,fil_format,mapfile,weightfile=""
 character(len=5000000) :: line,char*1,line2*200
 character(len=1), allocatable :: allele1(:)
 integer :: ids(1000000),idinv(100000),nloc_chr(100)
 integer*1, allocatable :: ifour(:)
 integer*4 :: jpos(4)=(/0,2,4,6/),jval(4)
 logical :: calc_freqs !plinkbed_file, ldmipmrk_file, ldmipout_fil
-namelist/inputs/nchroms,pnloc,pndat,genotypefile,mapfile,fil_format,igiv,add_diag,option,ivanraden,calc_freqs
+namelist/inputs/nchroms,pnloc,pndat,genotypefile,mapfile,fil_format,igiv,add_diag,option,ivanraden,calc_freqs,weightfile
 
 !read steer file
 print *,' reading gghatvr4.inp'
@@ -73,6 +73,7 @@ if(mapfile(1:1)/="0" .and. fil_format=="ldmipgen")ifilnam2=1
 !read(2,*)ivanraden   !VanRaden method : 1 or 2 [or -1 or -2 where minus indicates that all allele frequencies are read from file gghatvr3.freq]
 !if(igiv==-1)ivanraden=sign(2,ivanraden)
 if(.not.(calc_freqs))open(80,file="gghatvr3.freq",status="old")
+if(len(weightfile)>0)open(81,file=weightfile,status="old")
 IF(NCHROMS==0)GOTO 23
 
 ic=scan(genotypefile,' ')
@@ -80,7 +81,7 @@ if(ic>1)genotypefile(ic:)=''  !remove perhaps some text at the end
 ic=scan(genotypefile,'%')
 close(2)
 
-  allocate(y(pndat),wt(pndat*2),afix(maxval(pnloc),pndat),frq(maxval(pnloc)),Gmat(pndat*2,pndat*2))
+  allocate(y(pndat),wt(pndat*2),afix(maxval(pnloc),pndat),frq(maxval(pnloc)),weight(maxval(pnloc)),Gmat(pndat*2,pndat*2))
   allocate(Amat(pndat*2,pndat*2),wt2(pndat*2),allele1(maxval(pnloc)),iorder(maxval(pnloc)))
   Gmat=0.0; Amat=0.; 
   allocate(ifix(2,maxval(pnloc),pndat),iifix(2,maxval(pnloc),pndat),nfrq(maxval(pnloc)),imean(pndat),id(pndat*2))
@@ -184,7 +185,7 @@ if(fil_format(1:8)=="ldmipgen")then
 endif
 !  read(4,*,end=9)ids(ncount),(iifix(1,j,ncount),j=1,nloc) !imean is actually ID number  
 
-nhap=0; ifix=0; wt=1.; imean=1; no_means=1; frq=0.; nfrq=0;ncount=0; 
+nhap=0; ifix=0; wt=1.; imean=1; no_means=1; frq=0.; nfrq=0;ncount=0; weight=1.0 
 do 
  ncount=ncount+1
  if(fil_format(1:8)=="ldmipgen" .or. fil_format(1:8)=="ldmipmrk" .or. fil_format(1:3)=="012" .or. fil_format(1:3)=="bgl" .or. fil_format(1:5)=="plink")then !OPTION0
@@ -293,30 +294,40 @@ else
     read(80,*)frq(i)
   enddo
 endif
+if(len(weightfile)==0)then
+   weight=1.0
+else
+   print *,'reading weights:',nloc
+  do i=1,nloc
+     read(81,*)weight(i)
+     weight(i)=sqrt(weight(i))
+  enddo
+endif   
+
 where(frq==.5)frq=.499   !because afix=0.0 is used to denote missing records and frq=.5 can result afix=0.0
 print *,'frq(1:5)',frq(1:5)
 
 if(fil_format(1:8)=="ldmipout")then
-   denom=sum(frq(1:l)*(1.-frq(1:l)))
+   denom=sum(frq(1:l)*(1.-frq(1:l))*weight(1:l)*weight(1:l))
    if(abs(ivanraden)==1)then
-     forall(ii=1:l,jj=1:pndat)ifix(:,ii,jj)=(ifix(:,ii,jj)-frq(ii))  !/sqrt(frq(ii)*(1.-frq(ii)))
+     forall(ii=1:l,jj=1:pndat)ifix(:,ii,jj)=(ifix(:,ii,jj)-frq(ii))*weight(ii)  !/sqrt(frq(ii)*(1.-frq(ii)))
    else
-     forall(ii=1:l,jj=1:pndat)ifix(:,ii,jj)=(ifix(:,ii,jj)-frq(ii))/sqrt(frq(ii)*(1.-frq(ii)))
+     forall(ii=1:l,jj=1:pndat)ifix(:,ii,jj)=weight(ii)*(ifix(:,ii,jj)-frq(ii))/sqrt(frq(ii)*(1.-frq(ii)))
    endif
 else !ldmipmrk
-   denom=2.*sum(frq(1:l)*(1.-frq(1:l)))
+   denom=2.*sum(frq(1:l)*(1.-frq(1:l))*weight(1:l)*weight(1:l))
    print *,'afix',afix(1:5,1)
    print *,'afix',afix(1,1:5)
    do i=1,pndat
     if(abs(ivanraden)==1)then
       where(afix(1:l,i)>0 .and. frq(1:l)>0 .and. frq(1:l)<1.)
-         afix(1:l,i)=(afix(1:l,i)-2.-2.*frq(1:l))  !/sqrt(2.*frq(1:l)*(1.-frq(1:l)))
+         afix(1:l,i)=(afix(1:l,i)-2.-2.*frq(1:l))*weight(1:l)  !/sqrt(2.*frq(1:l)*(1.-frq(1:l)))
       elsewhere
          afix(1:l,i)=0.
       endwhere
     else
       where(afix(1:l,i)>0 .and. frq(1:l)>0 .and. frq(1:l)<1.)
-         afix(1:l,i)=(afix(1:l,i)-2.-2.*frq(1:l))/sqrt(2.*frq(1:l)*(1.-frq(1:l)))
+         afix(1:l,i)=weight(1:l)*(afix(1:l,i)-2.-2.*frq(1:l))/sqrt(2.*frq(1:l)*(1.-frq(1:l)))
       elsewhere
          afix(1:l,i)=0.
       endwhere
@@ -328,7 +339,7 @@ endif
 if(abs(ivanraden)==1)then
   denomsum=denomsum+denom
 else
-  denomsum=denomsum+nloc
+  denomsum=denomsum+sum(weight(1:nloc)*weight(1:nloc))
 endif
 print *,' No of loci,denom     =',nloc,denom
 
@@ -403,7 +414,7 @@ endforall
 Gmat=Gmat+Amat
 ENDIF
 
-open(3,file='gghatvr3.g',status='unknown')
+open(3,file='gghatvr4.g',status='unknown')
 do i=1,pndat
 ii=i+pndat
 do j=1,i
@@ -429,7 +440,7 @@ IF(IGIV>0)THEN
   if(allocated(gmat))deallocate(gmat)                     !reduce memory usage
   if(allocated(amat))deallocate(amat)  
   allocate(gmat(pndat,pndat))
-  open(3,file='gghatvr3.g',status='old')
+  open(3,file='gghatvr4.g',status='old')
   do i=1,pndat
      do j=1,i
         read(3,*)ii,jj,gmat(i,j)
@@ -453,7 +464,7 @@ print *,' log(det(G)) =  ',det_log
 CALL POTRI(gmat(1:pndat,1:pndat),info=inf) 
 if(inf/=0)print *,' POTRIinfo=',inf
 
-      open(3,file='gghatvr3.giv',status='unknown')
+      open(3,file='gghatvr4.giv',status='unknown')
       DO I=1,PNDAT;
       do j=1,i
          aa=gmat(j,i)

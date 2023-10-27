@@ -14,6 +14,7 @@
   option="Gonly"                     !"noGnoGINV"||"Gonly"||"GandGINV"
   ivanraden=1                        !=1 (uses centralised genotypes)|| 2 (uses centralised and standarised genotypes)
   calc_freqs=T                       !=T||F (if(calc_freqs==F) a "gghatvr3.frq" (single column with freqs per SNP) is used to read the frequencies to be used from)
+  weightfile="snp.weights"       !provide file with SNP weights per chromosome (chromosome number is appended to filename; weights will be standardised)
 /
 
 
